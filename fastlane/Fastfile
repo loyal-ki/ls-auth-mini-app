@@ -1,0 +1,59 @@
+fastlane_version '2.71.0'
+fastlane_require 'pathname'
+
+platform :ios do
+  desc 'Build bundle for iOS'
+  lane :build_bundle do
+    build_bundle_platform("ios")
+  end
+end
+
+platform :android do
+  desc 'Build bundle for android'
+  lane :build_bundle do
+    build_bundle_platform("android")
+  end
+end
+
+def build_bundle_platform(platform)
+  package = load_config_json('../package.json')
+  version = package['version']
+
+  root_dir = Dir[File.expand_path('..')].first
+  build_dir = "#{root_dir}/build/generated/#{platform}"
+
+  custom_path_aws = "#{root_dir}/ls_auth_mini_app/ver_#{version}/#{platform}"
+
+  sh "rm -rf #{build_dir}/"
+  sh "rm -rf #{custom_path_aws}/"
+  sh "cd #{root_dir} && yarn bundle:#{platform}"
+  sh "mkdir -p #{custom_path_aws}"
+  sh "mv -v #{build_dir}/* #{custom_path_aws}/"
+
+  check_s3_folder_exists_and_upload_or_replace(platform, version)
+end
+
+
+
+def check_s3_folder_exists_and_upload_or_replace(platform, version)
+  root_dir = Dir[File.expand_path('..')].first
+
+  source_folder = "#{root_dir}/ls_auth_mini_app/ver_#{version}/#{platform}"
+
+  bucket_name = "love-story-loyalki"
+
+  folder_path = "mini-bundles/ls_auth_mini_app/ver_#{version}/#{platform}/"
+
+  s3_folder_path = "s3://#{bucket_name}/#{folder_path}"
+
+  sh "aws s3 rm #{s3_folder_path} --recursive"
+
+  sh "aws s3 cp #{source_folder} #{s3_folder_path} --recursive"
+
+  UI.message("Folder exists.")
+end
+
+def load_config_json(json_path)
+  config_file = File.read(json_path)
+  JSON.parse(config_file)
+end
